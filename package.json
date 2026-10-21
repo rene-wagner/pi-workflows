@@ -1,0 +1,37 @@
+{
+  "name": "pi-workflows",
+  "version": "0.1.0",
+  "description": "Declarative research, planning, sequential implementation and bounded review workflows for Pi",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "subagents",
+    "workflow"
+  ],
+  "files": [
+    "agents",
+    "prompts",
+    "skills",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "pi": {
+    "skills": [
+      "./skills"
+    ],
+    "prompts": [
+      "./prompts"
+    ],
+    "subagents": {
+      "agents": [
+        "./agents"
+      ]
+    }
+  }
+}
