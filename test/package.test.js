@@ -54,7 +54,7 @@ test("all six roles are namespaced and inherit no orchestration skills", () => {
     assert.equal(fields.async, "true");
     assert.equal(fields.inheritSkills, "false");
     assert.equal(fields.inheritProjectContext, "true");
-    assert.match(text, /Workflow-Vertrag/);
+    assert.match(text, /workflow contract/);
     assert.ok(list(fields.tools).includes("read"));
     assert.ok(list(fields.tools).includes("write")); // Reports only for non-workers.
     assert.equal(fields.model, undefined, "deployment chooses models");
@@ -72,25 +72,25 @@ test("nested delegation is limited to the requested edges", () => {
     assert.deepEqual(list(fields.allowedAgents), allowed[role] ?? []);
     if (role in allowed) assert.equal(fields.maxSubagentDepth, "2");
   }
-  assert.match(agents.manager.text, /genau EINEN/);
+  assert.match(agents.manager.text, /exactly ONE/);
   assert.match(agents.manager.text, /terminal/);
-  assert.match(agents.worker.text, /Plan-Checkboxen niemals selbst setzen/);
+  assert.match(agents.worker.text, /Never mark plan checkboxes yourself/);
 });
 
 test("researcher declares MCP selectors and background execution", () => {
   const { fields, text } = agents.researcher;
   assert.deepEqual(list(fields.tools).filter((t) => t.startsWith("mcp:")),
     ["mcp:gitea-mcp", "mcp:linear"]);
-  assert.match(text, /ausschließlich lesende Tools/);
+  assert.match(text, /Use only read-only tools/);
   assert.match(text, /BLOCKED/);
 });
 
 test("prompt loads skill and explicitly authorizes bounded delegation", async () => {
   const prompt = await read("prompts/workflow.md");
   assert.ok(frontmatter(prompt).description);
-  assert.match(prompt, /Skill `pi-workflow` vollständig/);
+  assert.match(prompt, /Read the full `pi-workflow` skill/);
   assert.match(prompt, /\$@/);
-  assert.match(prompt, /autorisiert ausdrücklich/);
+  assert.match(prompt, /This invocation explicitly permits the delegation/);
   const fields = frontmatter(skill);
   assert.equal(fields.name, "pi-workflow");
   assert.ok(fields.description.length <= 1024);
@@ -98,42 +98,43 @@ test("prompt loads skill and explicitly authorizes bounded delegation", async ()
 
 test("durable orchestration includes branch ordering, counters and resume gates", () => {
   assert.match(skill, /references\/contract.md/);
-  assert.ok(skill.indexOf("pi-workflows.researcher` mit Originalauftrag") <
-    skill.indexOf("git switch -c feature/"));
+  const researcherStart = skill.indexOf("Start `pi-workflows.researcher` with the original request");
+  const branchCreation = skill.indexOf("git switch -c feature/");
+  assert.ok(researcherStart >= 0 && branchCreation > researcherStart);
   for (const key of ["state.json", "baseCommit", "featureBranch", "activeRun",
     "correctionRounds", "reviewIndex", "review-limit", "summary.md"]) {
     assert.ok(skill.includes(key), key);
   }
   assert.match(skill, /correctionRounds == 3/);
-  assert.match(skill, /vor Beginn der Korrektur dauerhaft um 1 erhöhen/);
-  assert.match(skill, /maximal vier Reviews/);
-  assert.match(skill, /niemals auf 0 zurücksetzen/);
-  assert.match(skill, /niemals doppelte Worker starten/);
-  assert.match(skill, /Receipt\s+ist kein DONE/);
+  assert.match(skill, /increase and save `correctionRounds` by 1 before correction starts/);
+  assert.match(skill, /maximum of four reviews/);
+  assert.match(skill, /Never reset `correctionRounds` or `reviewIndex` to 0/);
+  assert.match(skill, /Never start duplicate workers/);
+  assert.match(skill, /launch receipt is not DONE/);
 });
 
 test("every planner handoff requires durable explicit user approval before implementation", async () => {
-  const gateStart = skill.indexOf("## 4. Planfreigabe");
-  const managerStart = skill.indexOf("`pi-workflows.manager` erhält plan.md");
+  const gateStart = skill.indexOf("## 4. Plan approval");
+  const managerStart = skill.indexOf("Supply `plan.md` and all context paths to `pi-workflows.manager`");
   assert.ok(gateStart > 0 && managerStart > gateStart);
   const gate = skill.slice(gateStart, managerStart);
-  for (const text of ["Nach JEDEM erfolgreichen planer-Durchlauf", "planApproval: null",
-    "stage: awaiting-plan-approval", "auf dessen Antwort warten", "Kein manager/worker-Start",
-    "planApproval.planSha256", "request.md und history", "Änderungswünschen",
-    "Workflow-Aufruf, planer-DONE, Schweigen, Abbruch der Frage und bloßes resume gelten nicht"]) {
+  for (const text of ["After EVERY successful `planer` run", "planApproval: null",
+    "stage: awaiting-plan-approval", "wait for the answer", "Do not start manager or worker without approval",
+    "planApproval.planSha256", "`request.md` and `history`", "For requested changes",
+    "Workflow invocation, planer DONE, silence, a dismissed question, and resume alone are not approval"]) {
     assert.ok(gate.includes(text), text);
   }
   const review = skill.slice(skill.indexOf("## 5."), skill.indexOf("## 6."));
-  assert.match(review, /Planfreigabe aus Abschnitt 4 einholen/);
-  assert.match(review, /Erst danach manager/);
+  assert.match(review, /Get plan approval under section 4/);
+  assert.match(review, /Only then start manager/);
   const resume = skill.slice(skill.indexOf("## 6."));
   assert.match(resume, /awaiting-plan-approval/);
-  assert.match(resume, /resume allein gibt die Umsetzung nicht frei/);
-  assert.match(resume, /Fehlende `planApproval`-Daten älterer\s+Tasks sind keine Freigabe/);
-  assert.match(agents.manager.text, /Bei fehlender oder abweichender\s+Freigabe BLOCKED/);
-  assert.match(agents.manager.text, /keine Worker starten/);
-  assert.match(agents.planer.text, /DONE ist keine Implementierungsfreigabe/);
-  assert.match(contract, /Ohne diese Freigabe dürfen weder manager\/worker starten/);
+  assert.match(resume, /Resume alone does not approve implementation/);
+  assert.match(resume, /Missing `planApproval` data in older tasks is not approval/);
+  assert.match(agents.manager.text, /If approval is missing or different, return BLOCKED/);
+  assert.match(agents.manager.text, /Do not start workers without valid approval/);
+  assert.match(agents.planer.text, /DONE is not approval to implement the plan/);
+  assert.match(contract, /Without this approval, do not start manager or worker/);
   const readme = await read("README.md");
   assert.match(readme, /Pause zur Planfreigabe/);
   assert.match(readme, /Auch dieser Plan wird erst nach erneuter\s+Benutzerfreigabe umgesetzt/);
@@ -146,11 +147,60 @@ test("artifact, plan and review contracts preserve ownership and validation", ()
   assert.match(contract, /\$HOME\/\.pi\/tasks\/<UUID>/);
   assert.match(contract, /- \[ \] P1:/);
   assert.match(contract, /  - \[ \] P1.T1:/);
-  assert.match(contract, /Nur manager setzt/);
-  assert.match(agents.planer.text, /Bestehende Phasen\/Checkboxen/);
-  assert.match(agents.reviewer.text, /untracked Produktdateien/);
-  assert.match(agents.reviewer.text, /BLOCKED, nicht CLEAN/);
-  assert.match(contract, /keine Filesystem-Sandbox/);
+  assert.match(contract, /Only manager sets/);
+  assert.match(agents.planer.text, /Keep existing phases, checkboxes, and execution notes unchanged/);
+  assert.match(agents.reviewer.text, /untracked product files/);
+  assert.match(agents.reviewer.text, /BLOCKED, not CLEAN/);
+  assert.match(contract, /not a filesystem sandbox/);
+});
+
+test("runtime prose keeps sentences within the STE length limits", async () => {
+  const documents = [
+    ...roles.map((role) => [`agents/${role}.md`, agents[role].text]),
+    ["prompts/workflow.md", await read("prompts/workflow.md")],
+    ["skills/pi-workflow/SKILL.md", skill],
+    ["skills/pi-workflow/references/contract.md", contract],
+  ];
+  // Prose sentences do not wrap across lines. This is not a complete STE vocabulary or grammar check.
+  // Treat inline code as one technical term; exclude fenced code, headings, and tables.
+  const sentences = (text) => text.replace(/`[^`\n]+`/g, "CODE")
+    .split(/(?<=[.!?])\s+/).map((sentence) => sentence.match(/\S+/g) ?? []);
+  for (const [path, text] of documents) {
+    if (text.startsWith("---\n")) {
+      for (const words of sentences(frontmatter(text).description)) {
+        assert.ok(words.length <= 25, `${path}: description exceeds 25 words`);
+      }
+    }
+    const prose = text.replace(/^---\n[\s\S]*?\n---\n/, "")
+      .replace(/^```[^\n]*\n[\s\S]*?^```\s*$/gm, "");
+    for (const line of prose.split("\n")) {
+      if (/^\s*(?:#|\|)/.test(line)) continue;
+      const instruction = line.replace(/^\s*(?:\d+\.|[-*])\s+/, "").trim();
+      for (const words of sentences(instruction)) {
+        assert.ok(words.length <= 20, `${path}: sentence exceeds 20 words: ${instruction}`);
+      }
+    }
+  }
+});
+
+test("review diagram preserves the correction limit and approval gate", () => {
+  const diagrams = [...skill.matchAll(/^```mermaid\n([\s\S]*?)^```/gm)];
+  assert.equal(diagrams.length, 1);
+  const diagram = diagrams[0][1];
+  for (const edge of [
+    'Result -->|CLEAN| Complete["Complete the workflow"]',
+    'Result -->|BLOCKED| Stop["Record blocker and stop"]',
+    'Result -->|FINDINGS| Limit{"correctionRounds == 3?"}',
+    'Limit -->|Yes| ReviewLimit["Record review-limit and stop"]',
+    'Limit -->|No| Count["Increase and save correctionRounds"]',
+    'Count --> Plan["Planer appends correction phases"]',
+    'Plan --> Approval["Get explicit user approval under section 4"]',
+    'Approval --> Manager["Manager completes only open phases"]',
+    'Manager --> Index["Increase reviewIndex"]',
+    "Index --> Review",
+  ]) {
+    assert.ok(diagram.includes(edge), edge);
+  }
 });
 
 test("documented initializer creates distinct private UUID directories outside repo", async () => {

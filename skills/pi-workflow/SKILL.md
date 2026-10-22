@@ -1,41 +1,55 @@
 ---
 name: pi-workflow
-description: Orchestriert das pi-workflows Package mit researcher, planer, manager, sequenziellen workers, advisor und reviewer. Bei /workflow oder ausdrücklichem Wunsch nach diesem delegierten Research-Plan-Implementierungs-Review-Workflow laden; auch zum Fortsetzen eines Task-Verzeichnisses.
+description: Controls the pi-workflows package with researcher, planer, manager, sequential workers, advisor, and reviewer. Use for /workflow, an explicit request for this delegated research-plan-implementation-review workflow, or a request to resume a task directory.
 ---
 
-# Main-Session-Orchestrierung
+# Main Session workflow control
 
-Lies zuerst `references/contract.md` vollständig. Löse diesen Pfad relativ zu diesem
-Skill-Verzeichnis auf und übergib den absoluten Vertragspfad jedem Subagent.
-Du bist Main Session, kein zusätzlicher Orchestrator-Subagent.
-Dieser Workflow ist nur bei ausdrücklichem Benutzerauftrag aktiv; sein Aufruf autorisiert
-die unten begrenzte Delegation. Nicht für jede normale Coding-Aufgabe automatisch starten.
+First, read all of `references/contract.md`.
+Resolve this path relative to this skill directory.
+Supply the absolute contract path to every subagent.
+You are the Main Session, not an additional workflow subagent.
 
-## 1. Preflight und Task-Verzeichnis
+Use this workflow only at the user's explicit request.
+Its invocation permits only the delegation specified below.
+Do not start it automatically for ordinary coding tasks.
 
-- Bei leerem Auftrag erst nach Aufgabe/Ticket fragen; noch keine Agents starten.
-- Prüfe Git-Repository, absoluten Root-Pfad, HEAD und Status einschließlich untracked Dateien.
-  Bei fehlendem Repository/HEAD stoppen und Benutzer fragen; nicht selbst initialisieren.
-  Bei fremden Änderungen oder einem anderen aktiven Workflow im selben Checkout pausieren,
-  bevor ein Branch oder Worker startet. Nicht automatisch aufräumen oder stashen.
-- Prüfe mit `subagent({action:"list", options:{capabilities:true}})`, dass genau die
-  sechs erwarteten `pi-workflows.*` Agents aus diesem Package verfügbar sind und keine
-  höher priorisierten Overrides Rollenrechte ungewollt ändern. Bei fehlendem Tool kann
-  dessen vorhandener Discovery-/Enable-Mechanismus benutzt werden; sonst Setup-Blocker melden.
-- Pi und `npm:pi-subagents` müssen separat installiert/geladen sein. Nicht selbst installieren.
-  Nested Delegation benötigt effektiv mindestens Tiefe 2, Standard bei kompatiblem pi-subagents.
-  Striktere Benutzer-Ceilings nicht lockern. Manager darf nur worker/advisor, planer nur advisor starten.
-- Researcher läuft immer mit `async:true`, damit ambient MCP-Extensions geladen werden.
-  Default-Selektoren sind `linear`, `gitea`, `github`. Benutzer müssen diese Server konfigurieren
-  oder die researcher-Tools per `subagents.agentOverrides` auf ihre Servernamen/benötigten
-  lesenden Tools anpassen (README). Fehlende Server, Auth oder Tools nicht als leere Recherche behandeln.
-  Kein erforderlicher externer Kontext darf stillschweigend ausgelassen werden.
-- Ein Task-Verzeichnis pro aktiver Pi-Session verwenden; bei erneutem Aufruf in derselben
-  Session den bekannten TASK_DIR wiederverwenden, nicht pro Subagent oder Review neu anlegen.
-  Neue unabhängige Aufgabe in derselben Session: Benutzer auf neue Session verweisen.
-  Neue Session: neue UUID. Bei explizitem `resume /absoluter/pfad` vorhandene Metadaten
-  zuerst prüfen und nur dieselbe Aufgabe fortsetzen. Kein globales „latest“ verwenden.
-- Neues Verzeichnis exklusiv mit Node (bereits für Pi/npm vorausgesetzt) anlegen:
+## 1. Preliminary checks and task directory
+
+- If the request is empty, ask for the task or ticket first.
+  Do not start agents yet.
+- Check the Git repository, absolute root path, HEAD, and status, including untracked files.
+  If the repository or HEAD is missing, stop.
+  Ask the user for instructions.
+  Do not initialize the repository yourself.
+  If unrelated changes or another active workflow share this checkout, pause before branch creation or a worker launch.
+  Do not clean up or stash changes automatically.
+- Use `subagent({action:"list", options:{capabilities:true}})` to check the available roles.
+  Check that exactly the six expected `pi-workflows.*` agents come from this package.
+  Check that higher-priority overrides do not make unwanted changes to role permissions.
+  If the tool is unavailable, use its existing discovery or enable mechanism, if available.
+  Otherwise, report a setup blocker.
+- Check that the setup installs and loads Pi and `npm:pi-subagents` separately.
+  Do not install them yourself.
+  Nested delegation requires an effective depth of at least 2, the default in compatible pi-subagents versions.
+  Do not increase stricter user limits.
+  Manager can start only worker or advisor.
+  Planer can start only advisor.
+- Always start researcher with `async:true` so that the runtime loads ambient MCP extensions.
+  The default selectors are `linear`, `gitea`, and `github`.
+  Users must configure these servers or adapt the researcher tools through `subagents.agentOverrides`.
+  Use their server names and required read-only tools as described in the README.
+  Do not treat missing servers, authentication, or tools as empty research results.
+  Do not omit required external context without notice.
+- Use one task directory per active Pi session.
+  For another invocation in the same session, reuse the known TASK_DIR.
+  Do not create a directory for each subagent or review.
+  For a new independent task, ask the user to start a new session.
+  Use a new UUID for a new session.
+  For explicit `resume /absolute/path`, check existing metadata first.
+  Continue only the same task.
+  Do not use a global `latest` pointer.
+- Create a new directory exclusively with Node, which Pi and npm already require:
 
 ```bash
 node --input-type=module -e '
@@ -51,123 +65,199 @@ console.log(dir);
 '
 ```
 
-Den ausgegebenen absoluten Pfad speichern und dem Benutzer nennen.
-`request.md` mit Originalauftrag, Repository, Ausgangsbranch/-commit und Scope anlegen.
-`state.json` anlegen: schemaVersion (1), taskId (UUID), taskDir, repo, sessionReference
-(soweit verfügbar, nicht erfinden), baseBranch, baseCommit, featureBranch (zunächst null),
-stage, correctionRounds (0), reviewIndex (0), activeRun (null), planApproval (null), history ([]).
-Nur Main schreibt diese Datei, jeweils per atomarem Dateiersatz.
-Stage-Übergänge/Run-IDs und Ergebnis-/Artefaktpfade vor und nach jedem Aufruf persistieren.
-Nur ein Main-Orchestrator darf einen Task gleichzeitig fortsetzen.
+Save the absolute path from the command output.
+Give this path to the user.
+Create `request.md` with the original request, repository, initial branch and commit, and scope.
+Create `state.json` with these fields:
 
-## 2. Gemeinsames Aufrufprotokoll
+- `schemaVersion`: 1
+- `taskId`: UUID
+- `taskDir`
+- `repo`
+- `sessionReference`: use the available reference; do not invent one
+- `baseBranch`
+- `baseCommit`
+- `featureBranch`: initially null
+- `stage`
+- `correctionRounds`: 0
+- `reviewIndex`: 0
+- `activeRun`: null
+- `planApproval`: null
+- `history`: []
 
-Native `subagent`-Aufrufe verwenden, keine RPC-, CLI-, Workflow-Script- oder Chain-Adapter.
-Jeden Agent mit Namespace auswählen und explizitem `cwd: REPO`, `async:true` starten.
-Im Task immer alle Übergabefelder aus dem Vertrag nennen, inklusive Vertragspfad,
-exakten Ausgabepfaden und expliziter Delegationsbefugnis bei planer/manager.
-`options.sessionDir` kann auf ein rollen-/rundenspezifisches Unterverzeichnis von
-TASK_DIR/sessions gesetzt werden; native Debug-/Run-Metadaten bleiben runtimeverwaltet.
+Only Main writes this file.
+Use atomic file replacement for each write.
+Before and after each call, save stage transitions, run IDs, results, and artifact paths.
+Only one Main Session can resume a task at a time.
 
-Nach Launch Run-ID in state.activeRun speichern, noch keine nächste Stufe starten.
-Im interaktiven Main auf native Completion warten und die Kontrolle abgeben; nicht pollen
-oder unnötig blockierend warten. Beim Wake Ergebnis und Status mit der exakten Run-ID
-prüfen, Bericht lesen, erwarteten Pfad/Datei und Rollenstatus validieren; ein Launch-Receipt
-ist kein DONE. Fehlende/abweichende Artefakte, Fehler, Timeouts und unklare Ergebnisse → BLOCKED.
-Keine Rohantwort durch `output` auf `plan.md` oder einen anderen direkt geschriebenen
-Bericht routen: Agent schreibt den Bericht, Rückgabe enthält nur Status und Pfad.
+## 2. Shared call protocol
 
-Bei Blockern `stage: blocked`, Fehler/Run-ID und Teiländerungen dokumentieren,
-Benutzer informieren und stoppen. Keine automatische Endlosschleife.
-Keine nächste Rolle starten, solange der vorherige Agent oder dessen Worker noch aktiv ist.
+Use native `subagent` calls.
+Do not use RPC, CLI, workflow-script, or chain adapters.
+Select each agent by its namespaced name.
+Set an explicit `cwd: REPO` and `async:true` for each launch.
+Include all contract handoff fields in every assignment.
+Include the contract path, exact output paths, and explicit delegation permissions for planer and manager.
+You can set `options.sessionDir` to a role-specific or round-specific directory under `TASK_DIR/sessions`.
+The runtime continues to manage native debug and run metadata.
 
-## 3. Research → Fragen → Feature-Branch → Plan
+After launch, save the run ID in `state.activeRun`.
+Do not start the next stage yet.
+In interactive Main, wait for native completion by yielding control.
+Do not poll or wait with unnecessary blocking calls.
+After wake-up, check the result and status with the exact run ID.
+Read the report.
+Check the expected path, file, and role status.
+A launch receipt is not DONE.
+For missing or different artifacts, errors, timeouts, or unclear results, report BLOCKED.
+Do not route a raw response through `output` to `plan.md` or another report that the agent writes directly.
+The agent writes the report.
+Its return message contains only status and path.
 
-1. `pi-workflows.researcher` mit Originalauftrag starten; Ausgabe `TASK_DIR/research.md`.
-2. Bericht lesen. Sämtliche offenen Fragen gesammelt dem Benutzer stellen, bevor Planung
-   oder Umsetzung beginnt. Antworten in `request.md` ergänzen. Nicht-blockierende
-   Restfragen dürfen mit ausdrücklich genehmigten Annahmen bis zum Abschluss verbleiben.
-   Bei blockierenden Fragen auf Antwort warten, keine Anforderungen erraten.
-3. Erst nach erfolgreicher Recherche und nötigen Antworten Git-Status erneut prüfen.
-   Auf Basis des aufgezeichneten HEAD einen neuen lokalen Feature-Branch erstellen:
-   `git switch -c feature/<kurzer-sicherer-slug>-<task-uuid>`.
-   Slug nur aus Kleinbuchstaben/Ziffern/Bindestrichen; Argumente immer sicher quoten.
-   `git check-ref-format --branch` vorab benutzen. Existierenden Branch nie überschreiben.
-   Basis-HEAD unverändert verifizieren; bei Drift pausieren. Branch in state speichern.
-4. `pi-workflows.planer` mit research.md, request.md, Basis und Branch starten.
-   Ausgabe `TASK_DIR/plan.md`; darf ausschließlich `pi-workflows.advisor` für
-   begrenzte Planungsfragen delegieren.
-5. Plan lesen und auf vollständigen Scope, Nested Checkboxen, eindeutige IDs, Abhängigkeiten
-   und überprüfbare Akzeptanz prüfen. Neue blockierende Fragen dem Benutzer vorlegen.
+For blockers, set `stage: blocked`.
+Record the error, run ID, and partial changes.
+Inform the user.
+Stop.
+Do not start an automatic unlimited retry loop.
+Before you start the next role, make sure that the previous agent and all its workers are inactive.
 
-## 4. Planfreigabe → sequenzielle Umsetzung
+## 3. Research, questions, feature branch, and plan
 
-Nach JEDEM erfolgreichen planer-Durchlauf (initial, nach Änderungswünschen und bei
-Review-Korrekturen) ist eine verbindliche Benutzerpause einzulegen:
+1. Start `pi-workflows.researcher` with the original request.
+   Set its output path to `TASK_DIR/research.md`.
+2. Read the report.
+   Ask the user all open questions together before planning or implementation.
+   Add the answers to `request.md`.
+   Other open questions can remain until completion if the user explicitly approves the associated assumptions.
+   For questions that prevent progress, wait for answers.
+   Do not guess requirements.
+3. After successful research and the necessary answers, check Git status again.
+   Create a new local feature branch from the recorded HEAD:
+   `git switch -c feature/<short-safe-slug>-<task-uuid>`.
+   Use only lowercase letters, digits, and hyphens in the slug.
+   Always quote arguments safely.
+   Use `git check-ref-format --branch` first.
+   Never overwrite an existing branch.
+   Check that the base HEAD did not change.
+   If it changed, pause.
+   Save the branch in state.
+4. Start `pi-workflows.planer` with `research.md`, `request.md`, the base commit, and the branch.
+   Set its output path to `TASK_DIR/plan.md`.
+   Permit delegation only to `pi-workflows.advisor` for limited planning questions.
+5. Read the plan.
+   Check its full scope, nested checkboxes, unique IDs, dependencies, and measurable acceptance criteria.
+   Ask the user any new questions that prevent progress.
 
-1. Plan prüfen, `planApproval: null`, `activeRun: null` und `stage: awaiting-plan-approval`
-   atomar speichern. Den SHA-256 des aktuellen plan.md für die Freigabe ermitteln.
-2. Dem Benutzer eine kurze Zusammenfassung von Phasen, betroffenen Dateien, Risiken und
-   Prüfungen sowie den absoluten Pfad zu plan.md zeigen. Explizit fragen, ob dieser Plan
-   umgesetzt werden darf oder geändert werden soll. Dann die Kontrolle an den Benutzer
-   abgeben und auf dessen Antwort warten. Kein manager/worker-Start und keine eigene
-   Implementierung, solange die Freigabe fehlt. Auch ein fehlerfreier Plan ist keine Freigabe.
-3. Nur eine ausdrückliche Zustimmung zum vorgelegten aktuellen Plan gilt als Freigabe.
-   Workflow-Aufruf, planer-DONE, Schweigen, Abbruch der Frage und bloßes resume gelten nicht.
-   Antwort in request.md und history festhalten; bei Zustimmung `planApproval` mit
-   `planSha256` und `response` speichern, danach `stage: implementing` setzen.
-4. Bei Änderungswünschen diese in request.md festhalten und planer erneut beauftragen;
-   danach denselben Freigabeschritt wiederholen. Bei Ablehnung pausiert bleiben.
-   Eine geänderte Planung macht eine frühere Freigabe ungültig.
+## 4. Plan approval and sequential implementation
 
-Vor jedem manager-Start muss Main die explizite Freigabe für den aktuellen Plan prüfen
-(SHA-256 muss mit `planApproval.planSha256` übereinstimmen). Fehlt sie oder weicht der
-Plan ab, zurück zur Benutzerpause. Freigabedaten ausdrücklich im Manager-Auftrag übergeben.
-Manager-eigene Checkboxen/Ausführungsnotizen während eines genehmigten Durchlaufs erfordern
-keine neue Freigabe; vor einem erneuten manager-Start gilt die Prüfung wieder.
+After EVERY successful `planer` run, pause for user approval.
+This includes the initial plan, requested changes, and review corrections.
 
-`pi-workflows.manager` erhält plan.md und alle Kontextpfade; Bericht
-`manager-round-0.md` (später Rundennummer). Explizit nur Delegation an
-`pi-workflows.worker` und `pi-workflows.advisor` erlauben und Serialisierung verlangen.
-Manager arbeitet alle offenen Phasen ab, jeweils genau ein Worker.
-Nach DONE Plan selbst lesen: Jede Phase und jeder Task muss `[x]` sein und Evidenz besitzen.
-BLOCKED, offene Checkboxen oder fehlgeschlagene Prüfungen → kein Review-Erfolg behaupten.
+1. Check the plan.
+   Atomically save `planApproval: null`, `activeRun: null`, and `stage: awaiting-plan-approval`.
+   Calculate the SHA-256 of the current `plan.md` for approval.
+2. Give the user a short summary of phases, affected files, risks, and checks.
+   Include the absolute path to `plan.md`.
+   Ask explicitly whether to implement this plan or change it.
+   Yield control to the user.
+   Then wait for the answer.
+   Do not start manager or worker without approval.
+   Do not implement changes yourself while approval is missing.
+   An error-free plan is not approval.
+3. Accept only explicit user approval of the current plan that you presented.
+   Workflow invocation, planer DONE, silence, a dismissed question, and resume alone are not approval.
+   Record the answer in `request.md` and `history`.
+   After approval, save `planApproval` with `planSha256` and `response`.
+   Then set `stage: implementing`.
+4. For requested changes, record them in `request.md`.
+   Assign the plan to planer again.
+   Repeat the same approval step after that run.
+   If the user rejects the plan, remain paused.
+   A changed plan invalidates earlier approval.
 
-## 5. Review mit höchstens drei Korrekturrunden
+Before every manager launch, check the explicit approval for the current plan.
+Its SHA-256 must match `planApproval.planSha256`.
+If approval is missing or the plan differs, return to the user approval pause.
+Explicitly include the approval data in the manager assignment.
+Manager checkbox changes and execution notes during an approved run do not require new approval.
+Before another manager launch, apply the approval check again.
 
-Main besitzt den Schleifenzähler. Start: correctionRounds=0, reviewIndex=0.
-Ein erster Review plus höchstens drei Korrekturrunden ergibt maximal vier Reviews.
+Supply `plan.md` and all context paths to `pi-workflows.manager`.
+Set its report path to `manager-round-0.md`, or use the later round number.
+Explicitly permit delegation only to `pi-workflows.worker` and `pi-workflows.advisor`.
+Require sequential execution.
+Manager completes all open phases with exactly one worker at a time.
+After DONE, read the plan yourself.
+Every phase and task must have `[x]` and supporting evidence.
+Do not claim review success for BLOCKED, open checkboxes, or failed checks.
 
-1. `pi-workflows.reviewer` liest Auftrag, Research, aktuellen Plan und vollständigen
-   Repository-Diff seit baseCommit (auch Index, Working Tree und untracked Produktdateien).
-   Ausgabe `review-<reviewIndex>.md`. CLEAN gilt nur mit ausreichender Prüfevidenz.
-2. Bei CLEAN: zu Abschluss.
-3. Bei FINDINGS und correctionRounds == 3: `stage: review-limit`, offene Findings in
-   summary.md dokumentieren, Benutzer informieren und stoppen. Kein vierter Fix-Durchlauf,
-   kein stilles „fertig“, kein automatischer Neustart mit zurückgesetztem Zähler.
-4. Sonst correctionRounds vor Beginn der Korrektur dauerhaft um 1 erhöhen.
-   Den Review-Bericht an `pi-workflows.planer` mit bestehendem plan.md übergeben:
-   ausschließlich neue Korrekturphasen/-tasks anhängen, bestehende Checkboxen erhalten.
-5. Abdeckung aller Findings prüfen und die Planfreigabe aus Abschnitt 4 einholen.
-   Erst danach manager nur für offene Phasen starten (`manager-round-<correctionRounds>.md`).
-   Auf vollständigen Abschluss warten.
-   reviewIndex erhöhen und wieder bei 1 beginnen.
-6. BLOCKED ist kein FINDINGS und löst keinen automatischen Fix-Retry aus.
+## 5. Review with no more than three correction rounds
 
-## 6. Abschluss und Wiederaufnahme
+Main controls the correction counter.
+Start with `correctionRounds=0` and `reviewIndex=0`.
+One initial review and at most three correction rounds permit a maximum of four reviews.
 
-Bei CLEAN und vollständig erfülltem Plan: `stage: complete`, summary.md erstellen.
-Zusammenfassung, Branch, Testresultate, offene genehmigte Restfragen und absolute Pfade
-zu Task-Verzeichnis, Research, Plan und letztem Review nennen. Keine Commits/Pushes/PRs.
+```mermaid
+flowchart TD
+    Review["Run reviewer"] --> Result{"Review result"}
+    Result -->|CLEAN| Complete["Complete the workflow"]
+    Result -->|BLOCKED| Stop["Record blocker and stop"]
+    Result -->|FINDINGS| Limit{"correctionRounds == 3?"}
+    Limit -->|Yes| ReviewLimit["Record review-limit and stop"]
+    Limit -->|No| Count["Increase and save correctionRounds"]
+    Count --> Plan["Planer appends correction phases"]
+    Plan --> Approval["Get explicit user approval under section 4"]
+    Approval --> Manager["Manager completes only open phases"]
+    Manager --> Index["Increase reviewIndex"]
+    Index --> Review
+```
 
-Nach Unterbrechung state.json, request.md, Plan, vorhandene Berichte und exakte aktive
-Run-IDs lesen. Repository/Branch/Basis und Session-Zuordnung prüfen. Aktive Runs erst
-über status abgleichen; bei unklarem Laufzustand pausieren, niemals doppelte Worker starten.
-Sind Lauf/Ergebnis und Metadaten wegen eines unterbrochenen Schreibens nicht eindeutig,
-Benutzerentscheidung einholen. correctionRounds/reviewIndex niemals auf 0 zurücksetzen.
-Keinen neuen Branch bei Wiederaufnahme erstellen und abgeschlossene Phasen nicht wiederholen.
-Eine neue Session darf den alten Task nur über ausdrückliches resume übernehmen.
-Bei `stage: awaiting-plan-approval` den Plan erneut vorlegen und auf explizite Zustimmung
-warten; resume allein gibt die Umsetzung nicht frei. Fehlende `planApproval`-Daten älterer
-Tasks sind keine Freigabe. Vor einem neuen manager-Start die Freigabe nach Abschnitt 4
-prüfen; weder Wiederaufnahme noch native Completion darf diese Pause überspringen.
+For each review, start `pi-workflows.reviewer` with the request, research, current plan, and full repository diff from `baseCommit`.
+Include the index, working tree, and untracked product files.
+Set its output path to `review-<reviewIndex>.md`.
+Accept CLEAN only with sufficient check evidence.
+
+For FINDINGS at `correctionRounds == 3`, set `stage: review-limit`.
+Record open findings in `summary.md`.
+Inform the user.
+Stop.
+Do not start a fourth correction round or claim completion.
+Do not restart automatically with a reset counter.
+
+For FINDINGS below the limit, increase and save `correctionRounds` by 1 before correction starts.
+Supply the review report and existing `plan.md` to `pi-workflows.planer`.
+Require only appended correction phases and tasks.
+Keep existing checkboxes unchanged.
+Check that the new tasks cover all findings.
+Get plan approval under section 4.
+Only then start manager for the open phases.
+Use `manager-round-<correctionRounds>.md` for its report.
+Wait for full completion.
+Increase `reviewIndex` before the next review.
+BLOCKED is not FINDINGS and does not permit an automatic correction retry.
+
+## 6. Completion and resume
+
+After CLEAN and full plan completion, set `stage: complete`.
+Create `summary.md`.
+Report the summary, branch, test results, and any remaining questions with approved assumptions.
+Include absolute paths to the task directory, research, plan, and last review.
+Do not create commits, pushes, or pull requests.
+
+After interruption, read `state.json`, `request.md`, the plan, existing reports, and exact active run IDs.
+Check the repository, branch, base commit, and session association.
+First, check active runs with status.
+If run status is unclear, pause.
+Never start duplicate workers.
+If interrupted writes leave the run, result, or metadata unclear, ask the user for a decision.
+Never reset `correctionRounds` or `reviewIndex` to 0.
+Do not create a new branch on resume.
+Do not repeat completed phases.
+A new session can take over an old task only through explicit resume.
+
+For `stage: awaiting-plan-approval`, present the plan again.
+Wait for explicit approval.
+Resume alone does not approve implementation.
+Missing `planApproval` data in older tasks is not approval.
+Before a new manager launch, check approval under section 4.
+Neither resume nor native completion can bypass this pause.
