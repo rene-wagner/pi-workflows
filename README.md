@@ -9,7 +9,7 @@ Die Orchestrierung übernimmt die Main Session über das native `subagent`-Tool.
 
 ## Voraussetzungen und Installation
 
-- Pi mit Package-/Skill-/Prompt-Unterstützung (lokal geprüft: **Pi 1.3.0**).
+- Pi mit Package-/Skill-/Prompt-Unterstützung (lokal geprüft: **Pi 1.4.0**).
 - [nicobailon/pi-subagents](https://github.com/nicobailon/pi-subagents)
   mit Package-Agent-Discovery, Namespaces, `allowedAgents` und Nested Delegation
   (lokal geprüft: **0.80.0**).
@@ -32,7 +32,7 @@ Keine Dateien nach `~/.pi/agent/agents` kopieren.
 
 ### MCP konfigurieren
 
-Default-Namen des researcher: **linear**, **gitea**, **github**.
+Default-Namen des researcher: **linear** und **gitea**.
 Die Server müssen tatsächlich unter diesen Namen konfiguriert, erreichbar und
 authentifiziert sein. Das Package enthält keine Tokens und ändert keine MCP-Konfiguration.
 Pi Built-in MCP und pi-mcp-adapter sind gemäß deren Subagent-Unterstützung nutzbar.
@@ -40,15 +40,15 @@ MCP-Agents laufen immer im Hintergrund (`async: true`), damit benötigte ambient
 Extensions auch im Child geladen werden.
 
 Bei anderen Servernamen oder nur einem Teil der Quellen den **vollständigen**
-Tool-Satz überschreiben. Beispiel für diese Umgebung mit `gitea_mcp` und `linear`,
-ohne GitHub, in `~/.pi/agent/settings.json` mit vorhandenen Einstellungen **zusammenführen**:
+Tool-Satz überschreiben. Beispiel für diese Umgebung mit `gitea-mcp` und `linear`
+in `~/.pi/agent/settings.json` mit vorhandenen Einstellungen **zusammenführen**:
 
 ```json
 {
   "subagents": {
     "agentOverrides": {
       "pi-workflows.researcher": {
-        "tools": "read, bash, write, mcp:linear, mcp:gitea_mcp"
+        "tools": "read, bash, write, mcp:linear, mcp:gitea-mcp"
       }
     }
   }
@@ -68,6 +68,65 @@ Verschachtelung braucht effektiv mindestens `subagents.maxSubagentDepth: 2`
 Striktere globale oder geerbte Beschränkungen werden nicht umgangen.
 Modelle sind nicht fest verdrahtet und erben die lokale Pi-Konfiguration.
 Für rollenbezogene Modelle `subagents.agentOverrides["pi-workflows.worker"].model` usw. setzen.
+
+## Schlanker Kontextstart
+
+Main lädt zunächst nur den kurzen [Workflow-Skill](skills/pi-workflow/SKILL.md),
+[Core-Vertrag](skills/pi-workflow/references/contract-core.md) und die
+[Rechercheanleitung](skills/pi-workflow/references/research.md).
+Planung, Umsetzung, Review und Wiederaufnahme werden erst bei Bedarf gelesen.
+Vollständig geladene Anleitungen werden ohne Änderung oder Kontextverlust nicht erneut gelesen.
+Preflight prüft Fähigkeiten einmal; README, vollständige Settings und `doctor` sind keine routinemäßige Pflichtlektüre.
+
+Der Core-Vertrag enthält gemeinsame Sicherheits-, Übergabe- und Rückgaberegeln.
+Das [Planformat](skills/pi-workflow/references/plan-format.md) erhalten nur planer,
+manager, reviewer und Main zur Planprüfung, nicht researcher, worker oder advisor.
+Alle Rollen haben `defaultContext: fresh`; native Aufrufe setzen zusätzlich explizit
+`context: "fresh"`, auch bei verschachtelten Children. Globale Fork-Voreinstellungen
+übernehmen dadurch nicht versehentlich den Main-Verlauf.
+Projektanweisungen bleiben erhalten; globale Anweisungen und Skill-Kataloge werden nicht vererbt.
+
+### Optionales Projektprofil gegen doppelte Orchestrierungsanleitungen
+
+Der allgemeine `pi-subagents`-Skill lädt für komplexe Workflows zusätzliche, umfangreiche
+Referenzen. Für diesen fest definierten Package-Workflow ist der nötige Aufrufvertrag
+bereits enthalten. Das optionale [schlanke Projektprofil](profiles/lean-project.settings.json)
+blendet deshalb **nur diesen allgemeinen Skill** aus der Discovery aus.
+Die Subagent-Extension, deren Tools, Prompt-Vorlagen und etwa `council-mode` bleiben aktiv.
+
+Im gewünschten Workflow-Projekt den Profilinhalt mit `.pi/settings.json`
+**zusammenführen**, nicht vorhandene Einstellungen überschreiben:
+
+```json
+{
+  "packages": [
+    {
+      "source": "npm:pi-subagents",
+      "autoload": false,
+      "skills": ["!skills/pi-subagents/**"]
+    }
+  ]
+}
+```
+
+Voraussetzung: `npm:pi-subagents` ist bereits separat in den persönlichen Pi-Packages aktiviert.
+`autoload: false` wendet nur den Projektfilter auf dieses vorhandene Package an;
+es installiert oder aktiviert kein zweites Package. Bei einer Git-/lokalen Installation
+muss `source` zum vorhandenen Package-Ursprung passen.
+Pi muss dem Projekt vertrauen, damit dessen `.pi/settings.json` berücksichtigt wird.
+Das Profil wird nur ausgeliefert, **nicht automatisch aktiviert**; globale Einstellungen
+und installierte Package-Dateien werden nicht geändert.
+
+Der Filter gilt für alle Aufgaben in diesem Projekt, nicht nur für `/workflow`.
+Für freie, allgemeine Orchestrierung den Profileintrag wieder entfernen.
+Nach Änderungen `/reload` verwenden und für den Größenvergleich eine **neue Session** starten:
+Bereits gelesene Dokumente verschwinden durch Reload nicht aus dem bisherigen Verlauf.
+Ohne Profil bleibt der allgemeine Skill mitsamt seinen anwendbaren Regeln aktiv.
+
+Die Tests begrenzen die initialen Package-Anweisungen auf 11 KB UTF-8 und einzelne
+Referenzen auf 4,5 KB. Das sind Größenbudgets, keine gemessenen Modell-Tokenzahlen.
+Systemprompt, Tool-Schemas, Projektanweisungen und Preflight-Ausgaben kommen zusätzlich hinzu;
+ein tatsächliches Tokenziel muss in einer frischen Workflow-Session gemessen werden.
 
 ## Verwendung
 
@@ -129,7 +188,8 @@ und nicht im Ziel-Repository:
 └── summary.md
 ```
 
-Jede Rolle erhält absolute Pfade und den gemeinsamen Vertrag.
+Jede Rolle erhält absolute Pfade und den Core-Vertrag, bei Bedarf zusätzlich den Planformat-Vertrag.
+Der alte Pfad `references/contract.md` bleibt als rollenspezifischer Einstieg für bestehende Tasks erhalten.
 Alle Agent-Arbeitsdokumente/Logs liegen im Task-Verzeichnis. Beauftragte Produktdateien
 und Tests gehören selbstverständlich weiterhin ins Repository. Pi und pi-subagents
 dürfen eigene Laufzeit-/Debug-Metadaten zusätzlich an ihren nativen Speicherorten führen.
@@ -145,7 +205,8 @@ Aufbewahrung/Löschung erfolgt manuell; keine automatische Bereinigung.
 /workflow resume /home/name/.pi/tasks/<uuid>
 ```
 
-Main liest Status/Plan/Berichte, prüft Repository/Branch und gleicht aktive Run-IDs ab,
+Main liest zuerst Status und Auftrag sowie anschließend nur den aktuellen Plan und benötigte Berichte,
+prüft Repository/Branch und gleicht aktive Run-IDs ab,
 bevor weitere Arbeit gestartet wird. Unklare oder noch laufende Worker blockieren einen
 Neustart. Eine offene Planfreigabe bleibt als `awaiting-plan-approval` in state.json
 persistiert: `resume` allein ist keine Zustimmung und startet keine Implementierung.
@@ -193,8 +254,8 @@ npm pack --dry-run
 ```
 
 Die dependency-freien Node-Tests prüfen Manifest/Ressourcen, Frontmatter,
-Delegationsrechte, Sicherheits-/Artefaktverträge und die reale UUID-Erstellung in einem
-isolierten HOME. Es sind **keine** vollständigen LLM-/MCP-End-to-End-Tests.
+Delegationsrechte, Sicherheits-/Artefaktverträge, Phasenrouting, Größenbudgets und die reale
+UUID-Erstellung in einem isolierten HOME. Es sind **keine** vollständigen LLM-/MCP-End-to-End-Tests.
 
 Optional echte Discovery mit einer lokal installierten kompatiblen pi-subagents-Version:
 
@@ -204,5 +265,17 @@ PI_SUBAGENTS_ROOT=/absoluter/pfad/zu/node_modules/pi-subagents npm test
 
 Dieser Test nutzt die interne Discovery der angegebenen Version und prüft sechs
 Package-Agents ohne Parserdiagnosen. Er startet keine Modelle, verbindet keine MCP-Server
-und ändert keine Pi-Benutzereinstellungen. Das Diagramm bleibt als Entwicklungsreferenz
-im Repository, wird aber nicht im npm-Package ausgeliefert.
+und ändert keine Pi-Benutzereinstellungen.
+
+Optional den Projektfilter mit dem echten Pi-Resource-Loader prüfen (lokal: Pi 1.4.0):
+
+```bash
+PI_BINARY="$(command -v pi)" npm test
+```
+
+Der Test verwendet ein isoliertes HOME, ein offline gecachtes Fixture-Package und eine
+rein testinterne Extension zum Zugriff auf das Host-SDK. Er prüft den tatsächlichen
+Projektfilter sowie den Erhalt von Extension, anderem Skill und Prompt.
+Er beendet sich vor Session-/Modellstart; keine MCP-Verbindung, Installation oder
+Änderung persönlicher Einstellungen. Die Test-Extension wird nicht ausgeliefert.
+Das Diagramm bleibt ebenfalls nur als Entwicklungsreferenz im Repository.

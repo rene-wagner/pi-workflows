@@ -159,11 +159,24 @@ Ein Task-Verzeichnis gehört zu einer aktiven Pi-Session und wird dort wiederver
 Ein neuer unabhängiger Auftrag benötigt eine neue Session; die Übernahme eines alten
 Tasks in einer neuen Session erfordert ein ausdrückliches `resume`.
 
+## Bedarfsgeladene Anleitungen
+
+Der Einstieg lädt nur Bootstrap, Core-Vertrag und Rechercheanleitung.
+Main liest weitere Phasenreferenzen erst beim jeweiligen Übergang; das Diagramm ist keine Pflichtlektüre zur Laufzeit.
+Die globale Planfreigabe-, Sicherheits- und Review-Limit-Regel bleibt von Beginn an geladen.
+Alle Rollen werden explizit mit frischem Kontext gestartet.
+Das optionale Projektprofil und seine Auswirkungen sind in der [README](README.md#schlanker-kontextstart) beschrieben.
+
 ## Quellen
 
 - [Slash-Prompt `/workflow`](prompts/workflow.md)
 - [Main-Session-Workflow](skills/pi-workflow/SKILL.md)
-- [Gemeinsamer Workflow-Vertrag](skills/pi-workflow/references/contract.md)
+- [Core-Vertrag](skills/pi-workflow/references/contract-core.md)
+- [Recherche](skills/pi-workflow/references/research.md), [Planung und Freigabe](skills/pi-workflow/references/planning.md),
+  [Umsetzung](skills/pi-workflow/references/implementation.md), [Review](skills/pi-workflow/references/review.md),
+  [Wiederaufnahme](skills/pi-workflow/references/resume.md)
+- [Planformat für Planungsrollen](skills/pi-workflow/references/plan-format.md)
+- [Vertragseinstieg für bestehende Tasks](skills/pi-workflow/references/contract.md)
 - Rollen: [researcher](agents/researcher.md), [planer](agents/planer.md),
   [manager](agents/manager.md), [worker](agents/worker.md),
   [advisor](agents/advisor.md), [reviewer](agents/reviewer.md)

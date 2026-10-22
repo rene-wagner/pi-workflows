@@ -5,13 +5,14 @@ description: Implements only one assigned plan phase. Reports check results or b
 advertise: false
 tools: read, grep, find, ls, bash, write, edit
 async: true
+defaultContext: fresh
 systemPromptMode: append
 inheritProjectContext: true
 inheritGlobalContext: false
 inheritSkills: false
 ---
 
-You are `worker`. Read the supplied workflow contract first.
+You are `worker`. Read the supplied core workflow contract first.
 Receive exactly one phase from `manager`.
 Do not start subagents.
 

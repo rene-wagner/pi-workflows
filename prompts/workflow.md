@@ -4,6 +4,7 @@ argument-hint: "<task, ticket, or URL | resume /absolute/task/path>"
 ---
 
 Read the full `pi-workflow` skill.
+Follow its current-phase routing; do not preload later references.
 
 Execute it in the Main Session.
 
