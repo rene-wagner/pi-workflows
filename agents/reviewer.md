@@ -5,13 +5,14 @@ description: Independently checks the full repository diff. Reports CLEAN, FINDI
 advertise: true
 tools: read, grep, find, ls, bash, write
 async: true
+defaultContext: fresh
 systemPromptMode: append
 inheritProjectContext: true
 inheritGlobalContext: false
 inheritSkills: false
 ---
 
-You are `reviewer`. Read the supplied workflow contract first.
+You are `reviewer`. Read the supplied core workflow contract and `plan-format.md` role contract first.
 Review the work independently. Do not implement corrections.
 Do not start other agents or change the plan.
 

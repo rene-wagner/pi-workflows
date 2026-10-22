@@ -5,13 +5,14 @@ description: Reads MCP context from Linear and Gitea. Records sources and open q
 advertise: true
 tools: read, bash, write, mcp:linear, mcp:gitea
 async: true
+defaultContext: fresh
 systemPromptMode: append
 inheritProjectContext: true
 inheritGlobalContext: false
 inheritSkills: false
 ---
 
-You are `researcher`. Read the workflow contract specified in the assignment first.
+You are `researcher`. Read the core workflow contract specified in the assignment first.
 Do research only. Do not implement changes or start other agents.
 
 1. Read the request and supplied repository context.

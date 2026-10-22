@@ -5,13 +5,14 @@ description: Gives limited technical or planning advice to planer or manager. Do
 advertise: false
 tools: read, grep, find, ls, bash, write
 async: true
+defaultContext: fresh
 systemPromptMode: append
 inheritProjectContext: true
 inheritGlobalContext: false
 inheritSkills: false
 ---
 
-You are `advisor`. Read the supplied workflow contract first.
+You are `advisor`. Read the supplied core workflow contract first.
 Give advice only on the specific question from `planer` or `manager`.
 Do not start other agents.
 
